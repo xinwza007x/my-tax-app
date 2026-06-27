@@ -256,29 +256,37 @@ with col2:
                 จงสรุปแนวทางอุดรอยรั่วภาษี แนะนำไอเดียกองทุนหรือสิทธิ์ลดหย่อนเพิ่มเติมที่ถูกกฎหมายและเหมาะสมกับพอร์ตของเขามาเป็นข้อๆ"""
                 
                 with st.spinner("The Final Advisor กำลังประมวลข้อมูลกฎหมายและสัดส่วนตัวเลขของคุณ..."):
-                    try:
-                        # 💡 เปลี่ยนมายิงตรงเข้ากูเกิลผ่าน REST API เวอร์ชันเสถียร (v1) เพื่อแก้ปัญหา 404 บล็อกเวอร์ชันเก่า
-                        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={FINAL_API_KEY}"
-                        
-                        headers = {'Content-Type': 'application/json'}
-                        payload = {
-                            "contents": [
-                                {
-                                    "parts": [{"text": ai_prompt}]
-                                }
-                            ]
-                        }
-                        
-                        # ยิง Request ส่งข้อมูล
-                        response = requests.post(url, headers=headers, data=json.dumps(payload))
-                        res_json = response.json()
-                        
-                        # ดึงข้อความผลลัพธ์ออกมาแสดงผล
-                        if response.status_code == 200:
-                            ai_reply = res_json['candidates'][0]['content']['parts'][0]['text']
-                            st.success(ai_reply)
-                        else:
-                            st.error(f"Google API Error: {res_json.get('error', {}).get('message', 'Unknown Error')}")
+                    headers = {'Content-Type': 'application/json'}
+                    payload = {
+                        "contents": [
+                            {
+                                "parts": [{"text": ai_prompt}]
+                            }
+                        ]
+                    }
+                    
+                    # 💡 ลิสต์รายการ URL เส้นทางเชื่อมต่อ (Endpoints) ที่เราจะสุ่มยิงเพื่อหาเส้นทางที่ตอบกลับได้จริง
+                    # สลับเปลี่ยนสัดส่วนเวอร์ชัน v1beta และชื่อรุ่นโมเดลเพื่อป้องกันปัญหา 404 ของ Google
+                    api_endpoints = [
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={FINAL_API_KEY}",
+                        f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={FINAL_API_KEY}",
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={FINAL_API_KEY}"
+                    ]
+                    
+                    success_reply = False
+                    
+                    for url in api_endpoints:
+                        try:
+                            response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
+                            res_json = response.json()
                             
-                    except Exception as e:
-                        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อระบบ AI: {str(e)}")
+                            if response.status_code == 200:
+                                ai_reply = res_json['candidates'][0]['content']['parts'][0]['text']
+                                st.success(ai_reply)
+                                success_reply = True
+                                break # ลูปเจอเส้นทางที่ถูกต้องแล้ว ให้หยุดการทำงานทันที
+                        except Exception as e:
+                            continue # หากเส้นทางนี้พัง ให้ข้ามไปสุ่มยิงเส้นทางถัดไปในรายการ
+                            
+                    if not success_reply:
+                        st.error("❌ Google API Error: ไม่สามารถเชื่อมต่อช่องสัญญาณโมเดล AI ของกูเกิลได้ในขณะนี้ โปรดตรวจสอบความถูกต้องของรหัส API Key หรือลองกดใหม่อีกครั้งในภายหลังครับ")
