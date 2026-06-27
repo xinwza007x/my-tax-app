@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+import json
 
 # 1. ตั้งค่าหน้าเว็บธีมมืดและกว้าง (Wide Mode)
 st.set_page_config(page_title="Slash Tax Planner", layout="wide", initial_sidebar_state="collapsed")
@@ -243,26 +244,41 @@ with col2:
     
     if st.button("ส่งคำถามหา AI Expert"):
         if user_query:
-            # 1. เช็กคีย์ระบบหลังบ้าน (ตรวจสอบทั้ง Secrets บนคลาวด์ และตัวแปรในเครื่อง)
             if not FINAL_API_KEY:
-                st.error("❌ ระบบยังไม่ได้ตั้งค่ากุญแจเชื่อมต่อ โปรดนำ API Key ไปใส่ในเมนู Secrets บน Streamlit Cloud หรือใส่ในโค้ดก่อนครับ")
+                st.error("❌ ระบบยังไม่ได้ตั้งค่ากุญแจเชื่อมต่อ โปรดนำ API Key ไปใส่ในเมนู Settings > Secrets บน Streamlit Cloud ก่อนครับ")
             else:
-                try:
-                    # 2. ยืนยันสิทธิ์เปิดใช้งาน Google AI
-                    genai.configure(api_key=FINAL_API_KEY)
-                    
-                    # 3. ✨ เปลี่ยนชื่อรุ่นโมเดลให้ถูกต้องเป็น 'gemini-1.5-flash' เพื่อแก้บั๊ก 404
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    
-                    ai_prompt = f"""คุณคือ "พี่ถุงเงิน Slash Tax Pro" ที่ปรึกษาวางแผนภาษีบุคคลธรรมดาชั้นนำของไทย ตอบคำถามด้วยน้ำเสียงที่เป็นมิตร ย่อยเรื่องยากให้เข้าใจง่าย
-                    นี่คือพอร์ตรายได้รวมของผู้ใช้ในปัจจุบัน: ยอดรวม {total_gross} บาท, มีเงินได้สุทธิหลังหักลดหย่อนแล้ว {net_taxable_income} บาท, ต้องชำระภาษี {total_tax_payable} บาท
-                    สถานะความเสี่ยงย้อนหลัง: {'ความเสี่ยงสูง' if (is_vat_heavy or is_bank_heavy) else 'ปลอดภัยความเสี่ยงต่ำ'}
-                    
-                    คำถามของผู้ใช้: "{user_query}"
-                    จงสรุปแนวทางอุดรอยรั่วภาษี แนะนำไอเดียกองทุนหรือสิทธิ์ลดหย่อนเพิ่มเติมที่ถูกกฎหมายและเหมาะสมกับพอร์ตของเขามาเป็นข้อๆ"""
-                    
-                    with st.spinner("The Final Advisor กำลังประมวลข้อมูลกฎหมายและสัดส่วนตัวเลขของคุณ..."):
-                        response = model.generate_content(ai_prompt)
-                        st.success(response.text)
-                except Exception as e:
-                    st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อระบบ AI: {str(e)}")
+                # ประกอบ Prompt ข้อมูลตัวเลขส่งให้ AI
+                ai_prompt = f"""คุณคือ "พี่ถุงเงิน Slash Tax Pro" ที่ปรึกษาวางแผนภาษีบุคคลธรรมดาชั้นนำของไทย ตอบคำถามด้วยน้ำเสียงที่เป็นมิตร ย่อยเรื่องยากให้เข้าใจง่าย
+                นี่คือพอร์ตรายได้รวมของผู้ใช้ในปัจจุบัน: ยอดรวม {total_gross} บาท, มีเงินได้สุทธิหลังหักลดหย่อนแล้ว {net_taxable_income} บาท, ต้องชำระภาษี {total_tax_payable} บาท
+                สถานะความเสี่ยงย้อนหลัง: {'ความเสี่ยงสูง' if (is_vat_heavy or is_bank_heavy) else 'ปลอดภัยความเสี่ยงต่ำ'}
+                
+                คำถามของผู้ใช้: "{user_query}"
+                จงสรุปแนวทางอุดรอยรั่วภาษี แนะนำไอเดียกองทุนหรือสิทธิ์ลดหย่อนเพิ่มเติมที่ถูกกฎหมายและเหมาะสมกับพอร์ตของเขามาเป็นข้อๆ"""
+                
+                with st.spinner("The Final Advisor กำลังประมวลข้อมูลกฎหมายและสัดส่วนตัวเลขของคุณ..."):
+                    try:
+                        # 💡 เปลี่ยนมายิงตรงเข้ากูเกิลผ่าน REST API เวอร์ชันเสถียร (v1) เพื่อแก้ปัญหา 404 บล็อกเวอร์ชันเก่า
+                        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={FINAL_API_KEY}"
+                        
+                        headers = {'Content-Type': 'application/json'}
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [{"text": ai_prompt}]
+                                }
+                            ]
+                        }
+                        
+                        # ยิง Request ส่งข้อมูล
+                        response = requests.post(url, headers=headers, data=json.dumps(payload))
+                        res_json = response.json()
+                        
+                        # ดึงข้อความผลลัพธ์ออกมาแสดงผล
+                        if response.status_code == 200:
+                            ai_reply = res_json['candidates'][0]['content']['parts'][0]['text']
+                            st.success(ai_reply)
+                        else:
+                            st.error(f"Google API Error: {res_json.get('error', {}).get('message', 'Unknown Error')}")
+                            
+                    except Exception as e:
+                        st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อระบบ AI: {str(e)}")
