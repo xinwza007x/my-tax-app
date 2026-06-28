@@ -62,8 +62,6 @@ col1, col2 = st.columns([5, 7])
 if "my_income_portfolio" not in st.session_state:
     st.session_state.my_income_portfolio = [
         {"name": "งานประจำ (เงินเดือน)", "amount": 360000, "category": "มาตรา 40(1) : เงินเดือน / ค่าจ้าง", "freq": 12},
-        {"name": "ฟรีแลนซ์ ออกแบบกราฟิก", "amount": 180000, "category": "มาตรา 40(2) : รับจ้างอิสระ / ฟรีแลนซ์ / คอมมิชชัน / Affiliate", "freq": 24},
-        {"name": "นายหน้า Shopee Affiliate", "amount": 90000, "category": "มาตรา 40(2) : รับจ้างอิสระ / ฟรีแลนซ์ / คอมมิชชัน / Affiliate", "freq": 85}
     ]
 
 with col1:
